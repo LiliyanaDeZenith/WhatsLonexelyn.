@@ -200,3 +200,59 @@ function App() {
 }
 
 render(html`<${App} />`, document.getElementById('root'))
+// ===== OTP: tempel di paling bawah app.js =====
+Auth = function AuthOtp() {
+  const [mode, setMode] = useState('in') // 'in' | 'up' | 'otp'
+  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit(e) {
+    e.preventDefault()
+    setBusy(true)
+    setMsg('')
+    if (mode === 'otp') {
+      const { error } = await db.auth.verifyOtp({ email, token: code, type: 'signup' })
+      if (error) setMsg('Kode salah atau sudah kedaluwarsa. Coba kirim ulang kode.')
+    } else if (mode === 'up') {
+      const { data, error } = await db.auth.signUp({ email, password, options: { data: { username } } })
+      if (error) setMsg(error.message)
+      else if (!data.session) { setMode('otp'); setMsg('Kode verifikasi sudah dikirim ke ' + email) }
+    } else {
+      const { error } = await db.auth.signInWithPassword({ email, password })
+      if (error && /not confirmed/i.test(error.message)) {
+        await db.auth.resend({ type: 'signup', email })
+        setMode('otp')
+        setMsg('Email belum dikonfirmasi. Kode baru sudah dikirim ke ' + email)
+      } else if (error) setMsg(error.message)
+    }
+    setBusy(false)
+  }
+
+  async function resend() {
+    const { error } = await db.auth.resend({ type: 'signup', email })
+    setMsg(error ? error.message : 'Kode baru sudah dikirim ke ' + email)
+  }
+
+  const back = () => { setMode('in'); setCode(''); setMsg('') }
+  const otp = mode === 'otp'
+
+  return html`<div class="center">
+    <form class="auth" onSubmit=${submit}>
+      <h1>WhatsLonexelyn</h1>
+      ${otp
+        ? html`<input style="text-align:center;letter-spacing:6px;font-size:20px" inputmode="numeric" autocomplete="one-time-code" placeholder="Kode OTP dari email" value=${code} pattern="[0-9]{6,10}" maxlength="10" required onInput=${(e) => setCode(e.target.value.replace(/\D/g, ''))} />`
+        : html`${mode === 'up' && html`<input placeholder="Username (huruf kecil, angka, _)" value=${username} pattern="[a-z0-9_]{3,20}" title="3–20 karakter: huruf kecil, angka, atau underscore" required onInput=${(e) => setUsername(e.target.value.toLowerCase())} />`}
+          <input type="email" placeholder="Email" value=${email} onInput=${(e) => setEmail(e.target.value)} required />
+          <input type="password" placeholder="Password (minimal 6 karakter)" value=${password} minlength="6" onInput=${(e) => setPassword(e.target.value)} required />`}
+      <button class="go" disabled=${busy}>${otp ? 'Verifikasi' : mode === 'up' ? 'Daftar' : 'Masuk'}</button>
+      ${msg && html`<p>${msg}</p>`}
+      ${otp
+        ? html`<button type="button" class="link" onClick=${resend}>Kirim ulang kode</button><button type="button" class="link" onClick=${back}>Kembali</button>`
+        : html`<button type="button" class="link" onClick=${() => { setMode(mode === 'up' ? 'in' : 'up'); setMsg('') }}>${mode === 'up' ? 'Sudah punya akun? Masuk' : 'Belum punya akun? Daftar'}</button>`}
+    </form>
+  </div>`
+                                                    }
